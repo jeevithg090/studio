@@ -3,18 +3,10 @@
 Welcome to VocalNote, a smart, voice-powered AI notebook designed to revolutionize how you capture, organize, and interact with your ideas. Built with Next.js, Genkit, and ShadCN UI, this application showcases the power of modern web technologies and generative AI.
 
 <a href="https://studio.firebase.google.com/import?url=https%3A%2F%2Fgithub.com%2Fjeevithg090%2Fstudio">
-  <picture>
-    <source
-      media="(prefers-color-scheme: dark)"
-      srcset="https://cdn.firebasestudio.dev/btn/continue_dark_32.svg">
-    <source
-      media="(prefers-color-scheme: light)"
-      srcset="https://cdn.firebasestudio.dev/btn/continue_light_32.svg">
-    <img
-      height="32"
-      alt="Continue in Firebase Studio"
-      src="https://cdn.firebasestudio.dev/btn/continue_blue_32.svg">
-  </picture>
+  <img
+    height="32"
+    alt="Continue in Firebase Studio"
+    src="https://cdn.firebasestudio.dev/btn/continue_blue_32.svg">
 </a>
 
 ## ✨ Features
