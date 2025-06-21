@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { PlusCircle } from 'lucide-react';
 import { Button } from './ui/button';
@@ -13,6 +14,22 @@ interface NoteListProps {
   onSelectNote: (id: string) => void;
   onNewNote: () => void;
 }
+
+const NoteTimestamp = ({ date }: { date: Date }) => {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  if (!mounted) {
+    // To prevent hydration mismatch, we can return a placeholder or null on the server.
+    return <span className="text-xs text-muted-foreground">...</span>;
+  }
+
+  return (
+    <span className="text-xs text-muted-foreground">
+      {formatDistanceToNow(date, { addSuffix: true })}
+    </span>
+  );
+};
 
 export function NoteList({ notes, selectedNoteId, onSelectNote, onNewNote }: NoteListProps) {
   return (
@@ -33,9 +50,7 @@ export function NoteList({ notes, selectedNoteId, onSelectNote, onNewNote }: Not
                 className="h-auto flex-col items-start gap-0.5 py-2"
               >
                 <span className="font-semibold text-sm w-full truncate">{note.title || 'Untitled Note'}</span>
-                <span className="text-xs text-muted-foreground">
-                  {formatDistanceToNow(note.updatedAt, { addSuffix: true })}
-                </span>
+                <NoteTimestamp date={note.updatedAt} />
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
