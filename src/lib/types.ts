@@ -6,4 +6,8 @@ export interface Note {
   audioUrl?: string;
   createdAt: Date;
   updatedAt: Date;
+  source?: {
+    type: 'ppt';
+    filename: string;
+  };
 }

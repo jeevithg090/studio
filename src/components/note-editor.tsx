@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
-import { Bot, Loader2, Music, Save, Trash2 } from 'lucide-react';
+import { useEffect, useState, useTransition, useRef } from 'react';
+import { Bot, Loader2, Mic, Music, Save, Trash2, Upload } from 'lucide-react';
 import type { Note } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { summarizeNote } from '@/ai/flows/summarize-note';
+import { generateAudio } from '@/ai/flows/generate-audio';
+import { transcribeAudio } from '@/ai/flows/transcribe-audio';
+import { extractPptText } from '@/ai/flows/extract-ppt-text';
 import { AIEditMenu } from './ai-edit-menu';
 import { Separator } from './ui/separator';
 
@@ -22,8 +25,16 @@ interface NoteEditorProps {
 export function NoteEditor({ note, onNoteUpdate, onNoteSave, onNoteDelete }: NoteEditorProps) {
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content);
+  
   const [isSummarizing, startSummarizeTransition] = useTransition();
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, startTranscribeTransition] = useTransition();
+  const [isUploading, startUploadTransition] = useTransition();
+  
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -33,6 +44,96 @@ export function NoteEditor({ note, onNoteUpdate, onNoteSave, onNoteDelete }: Not
 
   const handleSave = () => {
     onNoteSave({ id: note.id, title, content, updatedAt: new Date() });
+  };
+
+  const handleContentChange = (newContent: string) => {
+    setContent(newContent);
+    onNoteUpdate({ id: note.id, content: newContent, updatedAt: new Date() });
+  };
+
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  const toggleRecording = async () => {
+    if (isRecording) {
+      mediaRecorderRef.current?.stop();
+      setIsRecording(false);
+    } else {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorderRef.current = new MediaRecorder(stream);
+          audioChunksRef.current = [];
+
+          mediaRecorderRef.current.ondataavailable = (event) => {
+            audioChunksRef.current.push(event.data);
+          };
+
+          mediaRecorderRef.current.onstop = async () => {
+            const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+            const audioDataUri = await blobToBase64(audioBlob);
+            
+            startTranscribeTransition(async () => {
+              try {
+                toast({ title: 'Transcribing audio...' });
+                const result = await transcribeAudio({ audioDataUri });
+                const newContent = content ? `${content}\n\n${result.transcribedText}` : result.transcribedText;
+                handleContentChange(newContent);
+                toast({ title: 'Transcription Complete', description: 'Your voice has been added to the note.' });
+              } catch (error) {
+                console.error('Transcription failed:', error);
+                toast({ variant: 'destructive', title: 'Transcription Failed' });
+              }
+            });
+            stream.getTracks().forEach(track => track.stop());
+          };
+
+          mediaRecorderRef.current.start();
+          setIsRecording(true);
+          toast({ title: 'Recording started...' });
+        } catch (err) {
+          console.error('Error starting recording:', err);
+          toast({ variant: 'destructive', title: 'Recording Error', description: 'Could not access microphone.' });
+        }
+      }
+    }
+  };
+
+  const handlePptUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+        const pptDataUri = reader.result as string;
+        startUploadTransition(async () => {
+            try {
+                const result = await extractPptText({ pptDataUri });
+                onNoteUpdate({ 
+                  id: note.id, 
+                  title: file.name.replace(/\.[^/.]+$/, ""),
+                  content: result.extractedText, 
+                  source: { type: 'ppt', filename: file.name },
+                  updatedAt: new Date()
+                });
+                toast({ title: 'PPT Processed', description: 'Text has been extracted from the presentation.' });
+            } catch (error) {
+                console.error('PPT extraction failed:', error);
+                toast({ variant: 'destructive', title: 'Extraction Failed', description: 'Could not extract text from the PPT.' });
+            }
+        });
+    };
+    reader.readAsDataURL(file);
+    toast({ title: 'Uploading PPT...', description: 'Please wait while we process your file.' });
+    if (event.target) {
+        event.target.value = '';
+    }
   };
 
   const handleSummarize = async () => {
@@ -53,40 +154,62 @@ export function NoteEditor({ note, onNoteUpdate, onNoteSave, onNoteDelete }: Not
   };
 
   const handleGenerateAudio = async () => {
+    if (!content) {
+      toast({ variant: 'destructive', title: 'Content is empty', description: 'Cannot generate audio for an empty note.' });
+      return;
+    }
     setIsGeneratingAudio(true);
-    toast({ title: 'Generating Audio...', description: 'Please wait while we process your note.' });
-    // Mock ElevenLabs integration
-    setTimeout(() => {
-      onNoteUpdate({ id: note.id, audioUrl: 'https://storage.googleapis.com/proudcity/mebanenc/uploads/2021/03/placeholder.mp3', updatedAt: new Date() });
-      setIsGeneratingAudio(false);
+    toast({ title: 'Generating Audio...', description: 'Please wait while we process your note. This may take a moment.' });
+    try {
+      const result = await generateAudio({ text: content });
+      onNoteUpdate({ id: note.id, audioUrl: result.audioDataUri, updatedAt: new Date() });
       toast({ title: 'Audio Generated', description: 'Your note is now available as audio.' });
-    }, 2000);
+    } catch (error) {
+      console.error('Audio generation failed:', error);
+      toast({ variant: 'destructive', title: 'Audio Generation Failed', description: 'Could not generate audio. Please try again.' });
+    } finally {
+      setIsGeneratingAudio(false);
+    }
   };
 
-  const handleContentChange = (newContent: string) => {
-    setContent(newContent);
-    onNoteUpdate({ id: note.id, content: newContent, updatedAt: new Date() });
-  };
+  const isBusy = isRecording || isTranscribing || isUploading || isSummarizing || isGeneratingAudio;
 
   return (
     <div className="flex flex-col h-full gap-4">
       <Card className="flex-shrink-0">
         <CardContent className="p-4 flex flex-wrap items-center gap-2">
           <div className="flex-grow font-headline text-lg">Editing Note</div>
-          <div className="flex gap-2 ml-auto">
-            <AIEditMenu content={content} onContentChange={handleContentChange} disabled={!content}/>
-            <Button onClick={handleSummarize} disabled={isSummarizing || !content} variant="outline">
+          <div className="flex gap-2 ml-auto flex-wrap justify-end">
+            <Button onClick={toggleRecording} variant="outline" disabled={isTranscribing || isUploading}>
+              {isRecording ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mic className="mr-2 h-4 w-4" />}
+              {isRecording ? 'Stop Recording' : isTranscribing ? 'Transcribing...' : 'Record Note'}
+            </Button>
+            <Button onClick={() => fileInputRef.current?.click()} variant="outline" disabled={isUploading || isRecording}>
+              {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+              {isUploading ? 'Processing...' : 'Import from PPT'}
+            </Button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handlePptUpload}
+              className="hidden"
+              accept=".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            />
+            <Separator orientation="vertical" className="h-10 mx-1 hidden md:block" />
+            <AIEditMenu content={content} onContentChange={handleContentChange} disabled={!content || isBusy}/>
+            <Button onClick={handleSummarize} disabled={isSummarizing || !content || isBusy} variant="outline">
               {isSummarizing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bot className="mr-2 h-4 w-4" />}
               Summarize
             </Button>
-            <Button onClick={handleGenerateAudio} disabled={isGeneratingAudio || !content} variant="outline">
+            <Button onClick={handleGenerateAudio} disabled={isGeneratingAudio || !content || isBusy} variant="outline">
               {isGeneratingAudio ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Music className="mr-2 h-4 w-4" />}
               Generate Audio
             </Button>
-            <Button onClick={handleSave}>
+            <Separator orientation="vertical" className="h-10 mx-1 hidden md:block" />
+            <Button onClick={handleSave} disabled={isBusy}>
               <Save className="mr-2 h-4 w-4" /> Save
             </Button>
-            <Button onClick={() => onNoteDelete(note.id)} variant="destructive">
+            <Button onClick={() => onNoteDelete(note.id)} variant="destructive" disabled={isBusy}>
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
@@ -101,13 +224,15 @@ export function NoteEditor({ note, onNoteUpdate, onNoteSave, onNoteDelete }: Not
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Note Title"
               className="text-3xl font-headline h-auto p-0 border-none focus-visible:ring-0 shadow-none"
+              disabled={isBusy}
             />
             <Separator />
             <Textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="Start writing your note here..."
+              placeholder="Start writing your note here, record your voice, or import a PPT..."
               className="flex-grow text-base resize-none border-none focus-visible:ring-0 shadow-none p-0 -mt-2"
+              disabled={isBusy}
             />
           </CardContent>
         </Card>
