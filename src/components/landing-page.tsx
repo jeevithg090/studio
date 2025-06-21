@@ -94,18 +94,6 @@ export function LandingPage() {
                     </div>
                 </section>
 
-                {/* Visual Showcase Section */}
-                <section className="container mx-auto px-4 sm:px-6 lg:px-8 py-10">
-                    <div className="relative rounded-xl border-8 border-foreground/5 bg-foreground/5 shadow-2xl overflow-hidden aspect-video">
-                        <div className="absolute top-0 left-0 w-full h-8 bg-background/80 backdrop-blur-sm flex items-center px-4 gap-1.5">
-                            <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                            <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                        </div>
-                       <Image src="https://placehold.co/1200x675.png" width={1200} height={675} alt="VocalNote App Screenshot" className="w-full mt-8" data-ai-hint="note taking" />
-                    </div>
-                </section>
-
                 {/* Features Section */}
                 <section id="features" className="bg-secondary/50 py-20">
                     <div className="container mx-auto px-4 sm:px-6 lg:px-8">
