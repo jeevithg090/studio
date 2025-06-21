@@ -2,8 +2,6 @@
 
 Welcome to VocalNote, a smart, voice-powered AI notebook designed to revolutionize how you capture, organize, and interact with your ideas. Built with Next.js, Genkit, and ShadCN UI, this application showcases the power of modern web technologies and generative AI.
 
-**[🚀 View the Live Demo](https://studio--vocalnote-1ri6e.us-central1.hosted.app)**
-
 <a href="https://studio.firebase.google.com/import?url=https%3A%2F%2Fgithub.com%2Fjeevithg090%2Fstudio">
   <picture>
     <source
