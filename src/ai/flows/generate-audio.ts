@@ -1,6 +1,6 @@
 'use server';
 /**
- * @fileOverview A flow to generate audio from text using Google's Text-to-Speech.
+ * @fileOverview A flow to generate audio from text using ElevenLabs Text-to-Speech.
  *
  * - generateAudio - A function that handles the audio generation process.
  * - GenerateAudioInput - The input type for the generateAudio function.
@@ -8,9 +8,9 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { googleAI } from '@genkit-ai/googleai';
 import { z } from 'genkit';
-import wav from 'wav';
+import { ElevenLabsClient } from 'elevenlabs';
+import { PassThrough } from 'stream';
 
 const GenerateAudioInputSchema = z.object({
   text: z.string().describe('The text to convert to audio.'),
@@ -21,7 +21,7 @@ const GenerateAudioOutputSchema = z.object({
   audioDataUri: z
     .string()
     .describe(
-      "The generated audio as a data URI. Expected format: 'data:audio/wav;base64,<encoded_data>'"
+      "The generated audio as a data URI. Expected format: 'data:audio/mpeg;base64,<encoded_data>'"
     ),
 });
 export type GenerateAudioOutput = z.infer<typeof GenerateAudioOutputSchema>;
@@ -32,6 +32,19 @@ export async function generateAudio(
   return generateAudioFlow(input);
 }
 
+const elevenlabs = new ElevenLabsClient({
+    apiKey: process.env.ELEVENLABS_API_KEY,
+});
+
+const streamToBuffer = (stream: PassThrough): Promise<Buffer> => {
+    return new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      stream.on('data', (chunk) => chunks.push(chunk));
+      stream.on('end', () => resolve(Buffer.concat(chunks)));
+      stream.on('error', reject);
+    });
+};
+
 const generateAudioFlow = ai.defineFlow(
   {
     name: 'generateAudioFlow',
@@ -39,55 +52,25 @@ const generateAudioFlow = ai.defineFlow(
     outputSchema: GenerateAudioOutputSchema,
   },
   async (input) => {
-    const { media } = await ai.generate({
-      model: googleAI('gemini-2.5-flash-preview-tts'),
-      config: {
-        responseModalities: ['AUDIO'],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Algenib' },
-          },
-        },
-      },
-      prompt: input.text,
-    });
-    if (!media) {
-      throw new Error('No audio was generated.');
+    if (!process.env.ELEVENLABS_API_KEY) {
+        throw new Error("ElevenLabs API key is not configured. Please set the ELEVENLABS_API_KEY environment variable.");
     }
-    const audioBuffer = Buffer.from(
-      media.url.substring(media.url.indexOf(',') + 1),
-      'base64'
-    );
-
-    const audioDataUri = `data:audio/wav;base64,${await toWav(audioBuffer)}`;
     
-    return { audioDataUri };
+    try {
+        const audioStream = await elevenlabs.generate({
+            voice: "Rachel",
+            text: input.text,
+            model_id: "eleven_multilingual_v2"
+        });
+
+        const buffer = await streamToBuffer(audioStream as PassThrough);
+        const audioDataUri = `data:audio/mpeg;base64,${buffer.toString('base64')}`;
+
+        return { audioDataUri };
+
+    } catch (error) {
+        console.error("Error generating audio with ElevenLabs:", error);
+        throw new Error("Failed to generate audio using ElevenLabs.");
+    }
   }
 );
-
-async function toWav(
-    pcmData: Buffer,
-    channels = 1,
-    rate = 24000,
-    sampleWidth = 2
-  ): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const writer = new wav.Writer({
-        channels,
-        sampleRate: rate,
-        bitDepth: sampleWidth * 8,
-      });
-  
-      let bufs = [] as any[];
-      writer.on('error', reject);
-      writer.on('data', function (d) {
-        bufs.push(d);
-      });
-      writer.on('end', function () {
-        resolve(Buffer.concat(bufs).toString('base64'));
-      });
-  
-      writer.write(pcmData);
-      writer.end();
-    });
-  }
