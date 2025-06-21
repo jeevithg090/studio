@@ -4,6 +4,21 @@ Welcome to VocalNote, a smart, voice-powered AI notebook designed to revolutioni
 
 **[🚀 View the Live Demo](https://studio--vocalnote-1ri6e.us-central1.hosted.app)**
 
+<a href="https://studio.firebase.google.com/import?url=https%3A%2F%2Fgithub.com%2Fjeevithg090%2Fstudio">
+  <picture>
+    <source
+      media="(prefers-color-scheme: dark)"
+      srcset="https://cdn.firebasestudio.dev/btn/continue_dark_32.svg">
+    <source
+      media="(prefers-color-scheme: light)"
+      srcset="https://cdn.firebasestudio.dev/btn/continue_light_32.svg">
+    <img
+      height="32"
+      alt="Continue in Firebase Studio"
+      src="https://cdn.firebasestudio.dev/btn/continue_blue_32.svg">
+  </picture>
+</a>
+
 ## ✨ Features
 
 VocalNote is more than just a digital notebook; it's your second brain that listens, understands, and assists you.
