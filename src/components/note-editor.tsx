@@ -175,18 +175,16 @@ export function NoteEditor({ note, onNoteUpdate, onNoteSave, onNoteDelete }: Not
   const isBusy = isRecording || isTranscribing || isUploading || isSummarizing || isGeneratingAudio;
 
   return (
-    <div className="flex flex-col h-full gap-4">
-      <Card className="flex-shrink-0">
-        <CardContent className="p-4 flex flex-wrap items-center gap-2">
-          <div className="flex-grow font-headline text-lg">Editing Note</div>
-          <div className="flex gap-2 ml-auto flex-wrap justify-end">
-            <Button onClick={toggleRecording} variant="outline" disabled={isTranscribing || isUploading}>
-              {isRecording ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mic className="mr-2 h-4 w-4" />}
-              {isRecording ? 'Stop Recording' : isTranscribing ? 'Transcribing...' : 'Record Note'}
+    <div className="flex flex-col h-full rounded-lg border bg-background shadow-sm">
+      <div className="flex-shrink-0 flex flex-wrap items-center justify-between gap-y-2 gap-x-4 p-3 border-b">
+        <div className="flex items-center gap-2 flex-wrap">
+            <Button onClick={toggleRecording} variant="outline" size="sm" disabled={isTranscribing || isUploading}>
+                {isRecording ? <Loader2 className="animate-spin" /> : <Mic />}
+                {isRecording ? 'Stop' : isTranscribing ? 'Transcribing...' : 'Record'}
             </Button>
-            <Button onClick={() => fileInputRef.current?.click()} variant="outline" disabled={isUploading || isRecording}>
-              {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-              {isUploading ? 'Processing...' : 'Import from PPT'}
+            <Button onClick={() => fileInputRef.current?.click()} variant="outline" size="sm" disabled={isUploading || isRecording}>
+                {isUploading ? <Loader2 className="animate-spin" /> : <Upload />}
+                {isUploading ? 'Importing...' : 'Import PPT'}
             </Button>
             <input
               type="file"
@@ -195,75 +193,72 @@ export function NoteEditor({ note, onNoteUpdate, onNoteSave, onNoteDelete }: Not
               className="hidden"
               accept=".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
             />
-            <Separator orientation="vertical" className="h-10 mx-1 hidden md:block" />
+            <Separator orientation="vertical" className="h-8 mx-1 hidden sm:block" />
             <AIEditMenu content={content} onContentChange={handleContentChange} disabled={!content || isBusy}/>
-            <Button onClick={handleSummarize} disabled={isSummarizing || !content || isBusy} variant="outline">
-              {isSummarizing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bot className="mr-2 h-4 w-4" />}
+            <Button onClick={handleSummarize} disabled={isSummarizing || !content || isBusy} variant="outline" size="sm">
+              {isSummarizing ? <Loader2 className="animate-spin" /> : <Bot />}
               Summarize
             </Button>
-            <Button onClick={handleGenerateAudio} disabled={isGeneratingAudio || !content || isBusy} variant="outline">
-              {isGeneratingAudio ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Music className="mr-2 h-4 w-4" />}
+            <Button onClick={handleGenerateAudio} disabled={isGeneratingAudio || !content || isBusy} variant="outline" size="sm">
+              {isGeneratingAudio ? <Loader2 className="animate-spin" /> : <Music />}
               Generate Audio
             </Button>
-            <Separator orientation="vertical" className="h-10 mx-1 hidden md:block" />
-            <Button onClick={handleSave} disabled={isBusy}>
-              <Save className="mr-2 h-4 w-4" /> Save
+        </div>
+        <div className="flex items-center gap-2">
+            <Button onClick={handleSave} disabled={isBusy} size="sm">
+              <Save /> Save
             </Button>
-            <Button onClick={() => onNoteDelete(note.id)} variant="destructive" disabled={isBusy}>
-              <Trash2 className="h-4 w-4" />
+            <Button onClick={() => onNoteDelete(note.id)} variant="destructive" size="icon" disabled={isBusy}>
+              <Trash2 />
             </Button>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
       
-      <div className="flex-grow flex flex-col gap-4 overflow-y-auto pr-2">
-        <Card className="flex-grow flex flex-col">
-          <CardContent className="p-6 flex-grow flex flex-col gap-4">
+      <div className="flex-grow overflow-y-auto">
+        <div className="p-6 md:p-8 flex flex-col gap-6 h-full">
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Note Title"
-              className="text-3xl font-headline h-auto p-0 border-none focus-visible:ring-0 shadow-none"
+              className="text-3xl lg:text-4xl font-headline font-bold h-auto p-0 border-none focus-visible:ring-0 shadow-none bg-transparent"
               disabled={isBusy}
             />
-            <Separator />
             <Textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="Start writing your note here, record your voice, or import a PPT..."
-              className="flex-grow text-base resize-none border-none focus-visible:ring-0 shadow-none p-0 -mt-2"
+              className="flex-grow text-base resize-none border-none focus-visible:ring-0 shadow-none p-0 bg-transparent min-h-[30vh]"
               disabled={isBusy}
             />
-          </CardContent>
-        </Card>
+          
+            {note.summary && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="font-headline flex items-center gap-2 text-lg">
+                    <Bot /> AI Summary
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription>{note.summary}</CardDescription>
+                </CardContent>
+              </Card>
+            )}
 
-        {note.summary && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-headline flex items-center gap-2">
-                <Bot /> AI Summary
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>{note.summary}</CardDescription>
-            </CardContent>
-          </Card>
-        )}
-
-        {note.audioUrl && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-headline flex items-center gap-2">
-                <Music /> Note Playback
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <audio controls className="w-full" src={note.audioUrl}>
-                Your browser does not support the audio element.
-              </audio>
-            </CardContent>
-          </Card>
-        )}
+            {note.audioUrl && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="font-headline flex items-center gap-2 text-lg">
+                    <Music /> Note Playback
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <audio controls className="w-full" src={note.audioUrl}>
+                    Your browser does not support the audio element.
+                  </audio>
+                </CardContent>
+              </Card>
+            )}
+        </div>
       </div>
     </div>
   );

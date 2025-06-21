@@ -97,7 +97,7 @@ export function VocalNoteApp() {
         </SidebarContent>
       </Sidebar>
       <SidebarInset>
-        <div className="p-4 h-full">
+        <div className="p-4 h-full bg-muted/20">
           {selectedNote ? (
             <NoteEditor
               key={selectedNote.id}
