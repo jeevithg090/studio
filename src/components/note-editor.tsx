@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, useTransition, useRef } from 'react';
-import { Bot, Loader2, Mic, Music, Save, Trash2, Upload } from 'lucide-react';
+import { useEffect, useState, useTransition, useRef, useMemo } from 'react';
+import { Bot, Loader2, Mic, Music, Save, Trash2, Upload, Keyboard } from 'lucide-react';
 import type { Note } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +12,7 @@ import { summarizeNote } from '@/ai/flows/summarize-note';
 import { generateAudio } from '@/ai/flows/generate-audio';
 import { transcribeAudio } from '@/ai/flows/transcribe-audio';
 import { extractPptText } from '@/ai/flows/extract-ppt-text';
+import { continueWriting } from '@/ai/flows/continue-writing';
 import { AIEditMenu } from './ai-edit-menu';
 import { Separator } from './ui/separator';
 
@@ -27,6 +28,7 @@ export function NoteEditor({ note, onNoteUpdate, onNoteSave, onNoteDelete }: Not
   const [content, setContent] = useState(note.content);
   
   const [isSummarizing, startSummarizeTransition] = useTransition();
+  const [isContinuing, startContinueTransition] = useTransition();
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, startTranscribeTransition] = useTransition();
@@ -41,6 +43,16 @@ export function NoteEditor({ note, onNoteUpdate, onNoteSave, onNoteDelete }: Not
     setTitle(note.title);
     setContent(note.content);
   }, [note]);
+
+  const wordCount = useMemo(() => {
+    if (!content) return 0;
+    return content.trim().split(/\s+/).filter(Boolean).length;
+  }, [content]);
+
+  const charCount = useMemo(() => {
+    return content.length;
+  }, [content]);
+
 
   const handleSave = () => {
     onNoteSave({ id: note.id, title, content, updatedAt: new Date() });
@@ -153,6 +165,26 @@ export function NoteEditor({ note, onNoteUpdate, onNoteSave, onNoteDelete }: Not
     });
   };
 
+  const handleContinueWriting = () => {
+    if (!content) {
+      toast({ variant: 'destructive', title: 'Content is empty', description: 'Cannot continue writing an empty note.' });
+      return;
+    }
+    startContinueTransition(async () => {
+      try {
+        toast({ title: 'AI is thinking...' });
+        const result = await continueWriting({ content });
+        const newContent = content.trim() + ' ' + result.continuedText;
+        handleContentChange(newContent);
+        toast({ title: 'Text Generated', description: 'AI has continued writing for you.' });
+      } catch (error) {
+        console.error('Continue writing failed:', error);
+        toast({ variant: 'destructive', title: 'AI Failed', description: 'Could not generate text. Please try again.' });
+      }
+    });
+  };
+
+
   const handleGenerateAudio = async () => {
     if (!content) {
       toast({ variant: 'destructive', title: 'Content is empty', description: 'Cannot generate audio for an empty note.' });
@@ -172,7 +204,7 @@ export function NoteEditor({ note, onNoteUpdate, onNoteSave, onNoteDelete }: Not
     }
   };
 
-  const isBusy = isRecording || isTranscribing || isUploading || isSummarizing || isGeneratingAudio;
+  const isBusy = isRecording || isTranscribing || isUploading || isSummarizing || isGeneratingAudio || isContinuing;
 
   return (
     <div className="flex flex-col h-full rounded-lg border bg-background shadow-sm">
@@ -195,6 +227,10 @@ export function NoteEditor({ note, onNoteUpdate, onNoteSave, onNoteDelete }: Not
             />
             <Separator orientation="vertical" className="h-8 mx-1 hidden sm:block" />
             <AIEditMenu content={content} onContentChange={handleContentChange} disabled={!content || isBusy}/>
+            <Button onClick={handleContinueWriting} disabled={isContinuing || !content || isBusy} variant="outline" size="sm">
+              {isContinuing ? <Loader2 className="animate-spin" /> : <Keyboard />}
+              Continue Writing
+            </Button>
             <Button onClick={handleSummarize} disabled={isSummarizing || !content || isBusy} variant="outline" size="sm">
               {isSummarizing ? <Loader2 className="animate-spin" /> : <Bot />}
               Summarize
@@ -214,8 +250,8 @@ export function NoteEditor({ note, onNoteUpdate, onNoteSave, onNoteDelete }: Not
         </div>
       </div>
       
-      <div className="flex-grow overflow-y-auto">
-        <div className="p-6 md:p-8 flex flex-col gap-6 h-full">
+      <div className="flex-grow overflow-y-auto flex flex-col">
+        <div className="p-6 md:p-8 flex flex-col gap-6 flex-grow">
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -225,40 +261,50 @@ export function NoteEditor({ note, onNoteUpdate, onNoteSave, onNoteDelete }: Not
             />
             <Textarea
               value={content}
-              onChange={(e) => setContent(e.target.value)}
+              onChange={(e) => handleContentChange(e.target.value)}
               placeholder="Start writing your note here, record your voice, or import a PPT..."
               className="flex-grow text-base resize-none border-none focus-visible:ring-0 shadow-none p-0 bg-transparent min-h-[30vh]"
               disabled={isBusy}
             />
+        </div>
           
+        <div className="flex-shrink-0 mt-auto">
             {note.summary && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-headline flex items-center gap-2 text-lg">
-                    <Bot /> AI Summary
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription>{note.summary}</CardDescription>
-                </CardContent>
-              </Card>
+              <div className="p-6 md:p-8 pt-0">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="font-headline flex items-center gap-2 text-lg">
+                      <Bot /> AI Summary
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <CardDescription>{note.summary}</CardDescription>
+                  </CardContent>
+                </Card>
+              </div>
             )}
 
             {note.audioUrl && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-headline flex items-center gap-2 text-lg">
-                    <Music /> Note Playback
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <audio controls className="w-full" src={note.audioUrl}>
-                    Your browser does not support the audio element.
-                  </audio>
-                </CardContent>
-              </Card>
+              <div className="p-6 md:px-8 pt-0">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="font-headline flex items-center gap-2 text-lg">
+                      <Music /> Note Playback
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <audio controls className="w-full" src={note.audioUrl}>
+                      Your browser does not support the audio element.
+                    </audio>
+                  </CardContent>
+                </Card>
+              </div>
             )}
         </div>
+      </div>
+      <div className="flex-shrink-0 flex items-center justify-end gap-4 text-xs text-muted-foreground p-3 border-t">
+          <span>Words: {wordCount}</span>
+          <span>Characters: {charCount}</span>
       </div>
     </div>
   );

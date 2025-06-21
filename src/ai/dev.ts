@@ -6,3 +6,4 @@ import '@/ai/flows/summarize-note.ts';
 import '@/ai/flows/generate-audio.ts';
 import '@/ai/flows/transcribe-audio.ts';
 import '@/ai/flows/extract-ppt-text.ts';
+import '@/ai/flows/continue-writing.ts';
