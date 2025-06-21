@@ -3,8 +3,8 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Mic, Upload, Bot, Music, PenLine } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Mic, Upload, Bot, Music, PenLine, Star, ArrowRight } from 'lucide-react';
 
 const Logo = () => (
     <svg
@@ -25,12 +25,12 @@ const Logo = () => (
   );
 
 const FeatureCard = ({ icon, title, description }: { icon: React.ReactNode, title: string, description: string }) => (
-    <Card className="text-center shadow-lg hover:shadow-xl transition-shadow duration-300">
+    <Card className="text-center shadow-lg hover:shadow-2xl transition-shadow duration-300 bg-card/50 backdrop-blur-sm border-primary/10">
         <CardHeader>
-            <div className="mx-auto bg-primary/10 p-3 rounded-full">
+            <div className="mx-auto bg-primary/10 p-4 rounded-full">
                 {icon}
             </div>
-            <CardTitle className="font-headline mt-4">{title}</CardTitle>
+            <CardTitle className="font-headline mt-4 text-xl">{title}</CardTitle>
         </CardHeader>
         <CardContent>
             <p className="text-muted-foreground">{description}</p>
@@ -38,15 +38,30 @@ const FeatureCard = ({ icon, title, description }: { icon: React.ReactNode, titl
     </Card>
 );
 
+const TestimonialCard = ({ quote, name, role }: { quote: string, name: string, role: string }) => (
+    <Card className="bg-card/50 backdrop-blur-sm border-primary/10 shadow-lg h-full flex flex-col">
+        <CardContent className="pt-6 flex-grow">
+            <div className="flex mb-4">
+                {[...Array(5)].map((_, i) => <Star key={i} className="h-5 w-5 text-yellow-400 fill-yellow-400" />)}
+            </div>
+            <p className="text-foreground italic">"{quote}"</p>
+        </CardContent>
+        <CardHeader>
+            <CardTitle className="text-base font-semibold">{name}</CardTitle>
+            <CardDescription>{role}</CardDescription>
+        </CardHeader>
+    </Card>
+);
 
 export function LandingPage() {
     return (
-        <div className="flex flex-col min-h-screen bg-background">
-            <header className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-                <div className="flex items-center gap-2">
+        <div className="flex flex-col min-h-screen bg-background text-foreground overflow-x-hidden">
+             <div className="absolute top-0 left-0 w-full h-[600px] bg-gradient-to-br from-primary/20 via-background to-background -z-10"></div>
+            <header className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
+                <Link href="/" className="flex items-center gap-2">
                     <Logo />
                     <h1 className="font-headline text-2xl font-bold text-foreground">VocalNote</h1>
-                </div>
+                </Link>
                 <Button asChild>
                     <Link href="/notes">Get Started</Link>
                 </Button>
@@ -54,26 +69,49 @@ export function LandingPage() {
 
             <main className="flex-grow">
                 {/* Hero Section */}
-                <section className="container mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-32 text-center">
-                    <h1 className="text-4xl md:text-6xl font-headline font-bold tracking-tight text-foreground">
-                        The AI-Powered Notebook<br />That <span className="text-primary">Listens & Thinks</span> With You
+                <section className="container mx-auto px-4 sm:px-6 lg:px-8 py-24 md:py-32 text-center relative">
+                    <div className="absolute -top-1/4 -left-1/4 w-1/2 h-1/2 bg-primary/10 rounded-full filter blur-3xl opacity-50 -z-10"></div>
+                    <div className="absolute -bottom-1/4 -right-1/4 w-1/2 h-1/2 bg-secondary/10 rounded-full filter blur-3xl opacity-50 -z-10"></div>
+                    
+                    <Button asChild variant="outline" className="mb-6 rounded-full">
+                        <Link href="#features">
+                            Now powered by Gemini 2.0 ✨
+                        </Link>
+                    </Button>
+                    <h1 className="text-5xl md:text-7xl font-headline font-extrabold tracking-tighter text-foreground">
+                        The AI-Powered Notebook<br />That <span className="text-primary bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-400">Listens & Thinks</span> With You
                     </h1>
-                    <p className="mt-6 max-w-2xl mx-auto text-lg md:text-xl text-muted-foreground">
-                        Capture your thoughts with voice, transcribe lectures from PowerPoints, and let AI summarize, edit, and even read your notes back to you. Welcome to the future of note-taking.
+                    <p className="mt-6 max-w-3xl mx-auto text-lg md:text-xl text-muted-foreground">
+                        Capture thoughts with your voice, transcribe lectures from PowerPoints, and let AI summarize, edit, and even read your notes back to you. The future of note-taking is here.
                     </p>
-                    <div className="mt-10">
-                        <Button size="lg" asChild>
-                            <Link href="/notes">Start Taking Notes Now</Link>
+                    <div className="mt-10 flex justify-center items-center gap-4">
+                        <Button size="lg" asChild className="shadow-lg shadow-primary/30">
+                            <Link href="/notes">Start for Free <ArrowRight className="ml-2" /></Link>
+                        </Button>
+                        <Button size="lg" variant="ghost" asChild>
+                            <Link href="#features">Learn More</Link>
                         </Button>
                     </div>
                 </section>
 
+                {/* Visual Showcase Section */}
+                <section className="container mx-auto px-4 sm:px-6 lg:px-8 py-10">
+                    <div className="relative rounded-xl border-8 border-foreground/5 bg-foreground/5 shadow-2xl overflow-hidden aspect-video">
+                        <div className="absolute top-0 left-0 w-full h-8 bg-background/80 backdrop-blur-sm flex items-center px-4 gap-1.5">
+                            <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                        </div>
+                       <Image src="https://placehold.co/1200x675.png" width={1200} height={675} alt="VocalNote App Screenshot" className="w-full mt-8" data-ai-hint="app screenshot interface" />
+                    </div>
+                </section>
+
                 {/* Features Section */}
-                <section className="bg-secondary py-20">
+                <section id="features" className="bg-secondary/50 py-20">
                     <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                        <div className="text-center mb-12">
-                            <h2 className="text-3xl md:text-4xl font-headline font-bold">A Symphony of Features</h2>
-                            <p className="mt-4 text-muted-foreground max-w-xl mx-auto">VocalNote combines cutting-edge AI with intuitive design to revolutionize your workflow.</p>
+                        <div className="text-center mb-16">
+                            <h2 className="text-4xl md:text-5xl font-headline font-bold">A Symphony of Features</h2>
+                            <p className="mt-4 text-muted-foreground max-w-2xl mx-auto">VocalNote combines cutting-edge AI with intuitive design to revolutionize your workflow.</p>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                             <FeatureCard 
@@ -101,38 +139,62 @@ export function LandingPage() {
                                 title="Text-to-Speech"
                                 description="Listen to your notes on the go. Turn any text into natural-sounding audio and give your eyes a rest."
                             />
-                            <div className="md:col-span-2 lg:col-span-1">
-                                <Card className="text-center shadow-lg hover:shadow-xl transition-shadow duration-300 h-full">
-                                    <CardHeader>
-                                        <div className="mx-auto bg-primary/10 p-3 rounded-full">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary"><path d="M12.22 2h-4.44a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.38"/><path d="M16 2l6 6"/><path d="M15 11h-1"/><path d="M12 11h1"/><path d="M9 11h1"/><path d="M14 15h1"/><path d="M11 15h1"/><path d="M8 15h1"/><path d="M13 19h2"/><path d="M9 19h2"/></svg>
-                                        </div>
-                                        <CardTitle className="font-headline mt-4">And Much More...</CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <p className="text-muted-foreground">Seamlessly organize, edit, and access your notes from anywhere. Your second brain is here.</p>
-                                    </CardContent>
-                                </Card>
-                            </div>
+                             <FeatureCard 
+                                icon={<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary"><path d="M12.22 2h-4.44a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.38"/><path d="M16 2l6 6"/><path d="M15 11h-1"/><path d="M12 11h1"/><path d="M9 11h1"/><path d="M14 15h1"/><path d="M11 15h1"/><path d="M8 15h1"/><path d="M13 19h2"/><path d="M9 19h2"/></svg>}
+                                title="And Much More..."
+                                description="Seamlessly organize, edit, and access your notes from anywhere. Your second brain is here."
+                            />
                         </div>
                     </div>
                 </section>
                 
-                 {/* Visual Showcase */}
+                {/* Testimonials Section */}
                 <section className="py-20">
                      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                        <div className="text-center mb-12">
-                            <h2 className="text-3xl md:text-4xl font-headline font-bold">See It In Action</h2>
-                            <p className="mt-4 text-muted-foreground max-w-xl mx-auto">A clean, intuitive interface designed for focus and productivity.</p>
+                        <div className="text-center mb-16">
+                            <h2 className="text-4xl md:text-5xl font-headline font-bold">Loved by Creatives & Professionals</h2>
+                            <p className="mt-4 text-muted-foreground max-w-2xl mx-auto">Don't just take our word for it. Here's what our users are saying.</p>
                         </div>
-                        <div className="relative rounded-lg border bg-card shadow-xl overflow-hidden">
-                           <Image src="https://placehold.co/1200x600.png" width={1200} height={600} alt="VocalNote App Screenshot" className="w-full" data-ai-hint="app screenshot" />
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                           <TestimonialCard 
+                                name="Sarah J." 
+                                role="Product Manager" 
+                                quote="VocalNote has completely changed my meeting workflow. I can record, transcribe, and summarize in minutes. It's a game-changer." 
+                           />
+                           <TestimonialCard 
+                                name="Michael B." 
+                                role="PhD Student" 
+                                quote="The PPT extraction feature saved me hours of manual note-taking from lecture slides. I can focus on the lecture itself now. Absolutely essential." 
+                           />
+                           <TestimonialCard 
+                                name="Alex R." 
+                                role="Creative Writer" 
+                                quote="I get my best ideas on the move. Being able to just talk to my phone and have it perfectly transcribed and organized is incredible for my creative process." 
+                           />
                         </div>
                     </div>
                 </section>
+
+                {/* Final CTA */}
+                <section className="py-20">
+                    <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+                        <div className="bg-primary/10 rounded-xl p-10 md:p-16 text-center relative overflow-hidden">
+                            <div className="absolute -top-10 -left-10 w-32 h-32 bg-primary/20 rounded-full filter blur-xl"></div>
+                            <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-primary/20 rounded-full filter blur-xl"></div>
+                            <h2 className="text-4xl md:text-5xl font-headline font-bold text-foreground">Ready to Supercharge Your Notes?</h2>
+                            <p className="mt-4 text-muted-foreground max-w-xl mx-auto">Join thousands of users who are thinking faster, working smarter, and capturing every brilliant idea.</p>
+                            <div className="mt-8">
+                                <Button size="lg" asChild className="shadow-lg shadow-primary/30">
+                                    <Link href="/notes">Get VocalNote for Free <ArrowRight className="ml-2" /></Link>
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
             </main>
 
-            <footer className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center text-muted-foreground">
+            <footer className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 text-center text-muted-foreground border-t">
                 <p>&copy; {new Date().getFullYear()} VocalNote. All rights reserved.</p>
             </footer>
         </div>
