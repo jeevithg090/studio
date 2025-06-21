@@ -102,7 +102,7 @@ export function LandingPage() {
                             <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
                             <div className="w-3 h-3 rounded-full bg-green-500"></div>
                         </div>
-                       <Image src="https://placehold.co/1200x675.png" width={1200} height={675} alt="VocalNote App Screenshot" className="w-full mt-8" data-ai-hint="app screenshot interface" />
+                       <Image src="https://placehold.co/1200x675.png" width={1200} height={675} alt="VocalNote App Screenshot" className="w-full mt-8" data-ai-hint="note taking" />
                     </div>
                 </section>
 
