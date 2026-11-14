@@ -32,9 +32,16 @@ export function AIEditMenu({ content, onEdit, isPending, disabled }: AIEditMenuP
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" disabled={disabled}>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={disabled}
+          aria-label="AI edit"
+          title="AI edit"
+          className="h-10 w-10 px-0 xl:h-9 xl:w-auto xl:px-3"
+        >
           {isPending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Sparkles aria-hidden="true" />}
-          AI edit
+          <span className="hidden xl:inline">AI edit</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">

@@ -4,6 +4,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Logo } from './logo';
+import { ThemeToggle } from './theme-toggle';
 
 interface Feature {
   icon: LucideIcon;
@@ -46,7 +47,7 @@ const FEATURES: Feature[] = [
 
 function FeatureCard({ icon: Icon, title, description }: Feature) {
   return (
-    <Card className="border-primary/10 bg-card/50 text-center shadow-lg backdrop-blur-sm transition-shadow duration-300 hover:shadow-2xl">
+    <Card className="border-primary/10 bg-card/50 text-center shadow-lg backdrop-blur-sm duration-300 hover:-translate-y-1 hover:shadow-xl transition-all">
       <CardHeader>
         <div className="mx-auto rounded-full bg-primary/10 p-4">
           <Icon className="h-8 w-8 text-primary" aria-hidden="true" />
@@ -78,12 +79,15 @@ export function LandingPage() {
       <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
         <div className="container mx-auto flex items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2" aria-label="VocalNote home">
-            <Logo className="h-10 w-10" />
-            <span className="font-headline text-2xl font-bold">VocalNote</span>
+            <Logo className="h-9 w-9 sm:h-10 sm:w-10" />
+            <span className="font-headline text-xl font-bold sm:text-2xl">VocalNote</span>
           </Link>
-          <Button asChild>
-            <Link href="/notes">Open notebook</Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Button asChild>
+              <Link href="/notes">Open notebook</Link>
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -100,7 +104,7 @@ export function LandingPage() {
             The AI-powered notebook
             <br />
             that{' '}
-            <span className="bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-primary to-fuchsia-600 bg-clip-text text-transparent dark:from-violet-400 dark:to-fuchsia-400">
               listens &amp; thinks
             </span>{' '}
             with you
