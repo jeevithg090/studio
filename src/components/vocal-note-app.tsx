@@ -17,6 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Logo } from './logo';
 import { NoteEditor } from './note-editor';
 import { NoteList } from './note-list';
+import { ThemeToggle } from './theme-toggle';
 
 const SAVE_STATUS_LABEL = {
   saved: 'Saved in this browser',
@@ -27,7 +28,7 @@ const SAVE_STATUS_LABEL = {
 
 function EditorSkeleton() {
   return (
-    <div className="flex h-full flex-col gap-6 rounded-lg border bg-background p-8" aria-label="Loading notes">
+    <div className="flex h-full flex-col gap-6 rounded-xl border bg-card p-8" role="status" aria-label="Loading notes">
       <Skeleton className="h-9 w-2/3" />
       <Skeleton className="h-4 w-full" />
       <Skeleton className="h-4 w-11/12" />
@@ -54,39 +55,44 @@ export function VocalNoteApp() {
   return (
     <SidebarProvider>
       <Sidebar collapsible="offcanvas">
-        <SidebarHeader>
-          <Link
-            href="/"
-            className="flex items-center gap-2 rounded-md p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-          >
-            <Logo />
-            <span className="flex flex-col">
-              <span className="font-headline text-xl font-bold">VocalNote</span>
-              <span className="text-xs text-sidebar-foreground/70">Your AI notebook</span>
-            </span>
-          </Link>
-        </SidebarHeader>
-        <SidebarContent>
-          <NoteList
-            notes={notes}
-            selectedNoteId={selectedNoteId}
-            onSelectNote={selectNote}
-            onNewNote={handleNewNote}
-            isLoaded={isLoaded}
-          />
-        </SidebarContent>
+        <aside aria-label="Notes sidebar" className="flex h-full min-h-0 flex-col">
+          <SidebarHeader>
+            <Link
+              href="/"
+              className="flex items-center gap-2 rounded-md p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            >
+              <Logo />
+              <span className="flex flex-col">
+                <span className="font-headline text-xl font-bold">VocalNote</span>
+                <span className="text-xs text-sidebar-foreground/70">Your AI notebook</span>
+              </span>
+            </Link>
+          </SidebarHeader>
+          <SidebarContent>
+            <NoteList
+              notes={notes}
+              selectedNoteId={selectedNoteId}
+              onSelectNote={selectNote}
+              onNewNote={handleNewNote}
+              isLoaded={isLoaded}
+            />
+          </SidebarContent>
+        </aside>
       </Sidebar>
       <SidebarInset className="h-svh min-h-0">
-        <header className="flex h-12 flex-shrink-0 items-center gap-2 border-b px-3">
-          <SidebarTrigger aria-label="Toggle note list" />
+        <header className="flex h-14 flex-shrink-0 items-center gap-2 border-b bg-background/95 px-2 backdrop-blur sm:px-4">
+          <SidebarTrigger aria-label="Toggle note list" className="h-10 w-10" />
           <h1 className="truncate font-headline text-sm font-semibold">{selectedNote?.title || 'VocalNote'}</h1>
-          {isLoaded && (
-            <span className="ml-auto hidden text-xs text-muted-foreground sm:inline" role="status" aria-live="polite">
-              {SAVE_STATUS_LABEL[saveStatus]}
-            </span>
-          )}
+          <div className="ml-auto flex flex-shrink-0 items-center gap-2">
+            {isLoaded && (
+              <span className="hidden text-xs text-muted-foreground sm:inline" role="status" aria-live="polite">
+                {SAVE_STATUS_LABEL[saveStatus]}
+              </span>
+            )}
+            <ThemeToggle />
+          </div>
         </header>
-        <div className="min-h-0 flex-1 bg-muted/20 p-2 sm:p-4">
+        <div className="min-h-0 flex-1 bg-muted/40 p-2 sm:p-4">
           {!isLoaded ? (
             <EditorSkeleton />
           ) : selectedNote ? (
@@ -97,7 +103,7 @@ export function VocalNoteApp() {
               onNoteDelete={handleDeleteNote}
             />
           ) : (
-            <div className="flex h-full items-center justify-center rounded-lg border-2 border-dashed bg-card p-6">
+            <div className="flex h-full items-center justify-center rounded-xl border-2 border-dashed bg-card p-6">
               <div className="text-center">
                 <PenSquare className="mx-auto h-12 w-12 text-muted-foreground" aria-hidden="true" />
                 <h2 className="mt-4 font-headline text-2xl font-semibold">No note selected</h2>
