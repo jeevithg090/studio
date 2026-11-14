@@ -327,7 +327,7 @@ The app sets these security headers on every response: `X-Content-Type-Options`,
 │   └── screenshots/           # README screenshots, captured from the running app
 ├── next.config.ts             # Security headers, Server Action body limit, server-only packages
 ├── tailwind.config.ts         # Design tokens (colors from CSS variables, fonts, animations)
-├── vitest.config.ts
+├── vitest.config.mts
 ├── eslint.config.mjs
 ├── .env.example               # Every supported environment variable
 └── src/
