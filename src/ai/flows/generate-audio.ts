@@ -1,63 +1,25 @@
 'use server';
+
 /**
- * @fileOverview A flow to generate audio from text using Google's Text-to-Speech.
- *
- * - generateAudio - A function that handles the audio generation process.
- * - GenerateAudioInput - The input type for the generateAudio function.
- * - GenerateAudioOutput - The return type for the generateAudio function.
+ * Converts note text to speech with a Gemini TTS model and returns a WAV data URI.
  */
 
-import { ai } from '@/ai/genkit';
-import { googleAI } from '@genkit-ai/googleai';
+import { ai, TTS_MODEL, TTS_VOICE } from '@/ai/genkit';
+import { googleAI } from '@genkit-ai/google-genai';
 import { z } from 'genkit';
-import wav from 'wav';
+import { parseDataUri } from '@/lib/data-uri';
+import { MAX_TTS_TEXT_CHARS } from '@/lib/limits';
+import { toWavBytes } from '@/lib/wav';
 
 const GenerateAudioInputSchema = z.object({
-  text: z.string().describe('The text to convert to audio.'),
+  text: z.string().trim().min(1).max(MAX_TTS_TEXT_CHARS).describe('The text to convert to audio.'),
 });
 export type GenerateAudioInput = z.infer<typeof GenerateAudioInputSchema>;
 
 const GenerateAudioOutputSchema = z.object({
-  audioDataUri: z
-    .string()
-    .describe(
-      "The generated audio as a data URI. Expected format: 'data:audio/wav;base64,<encoded_data>'"
-    ),
+  audioDataUri: z.string().describe("The generated audio as a data URI: 'data:audio/wav;base64,<encoded_data>'."),
 });
 export type GenerateAudioOutput = z.infer<typeof GenerateAudioOutputSchema>;
-
-export async function generateAudio(
-  input: GenerateAudioInput
-): Promise<GenerateAudioOutput> {
-  return generateAudioFlow(input);
-}
-
-async function toWav(
-  pcmData: Buffer,
-  channels = 1,
-  rate = 24000,
-  sampleWidth = 2
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const writer = new wav.Writer({
-      channels,
-      sampleRate: rate,
-      bitDepth: sampleWidth * 8,
-    });
-
-    const bufs: Buffer[] = [];
-    writer.on('error', reject);
-    writer.on('data', function (d) {
-      bufs.push(d);
-    });
-    writer.on('end', function () {
-      resolve(Buffer.concat(bufs).toString('base64'));
-    });
-
-    writer.write(pcmData);
-    writer.end();
-  });
-}
 
 const generateAudioFlow = ai.defineFlow(
   {
@@ -65,31 +27,28 @@ const generateAudioFlow = ai.defineFlow(
     inputSchema: GenerateAudioInputSchema,
     outputSchema: GenerateAudioOutputSchema,
   },
-  async (input) => {
+  async ({ text }) => {
     const { media } = await ai.generate({
-      model: googleAI.model('gemini-2.5-flash-preview-tts'),
+      model: googleAI.model(TTS_MODEL),
       config: {
         responseModalities: ['AUDIO'],
         speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Algenib' },
-          },
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: TTS_VOICE } },
         },
       },
-      prompt: input.text,
+      prompt: text,
     });
 
-    if (!media) {
-      throw new Error('No media returned from TTS model.');
-    }
+    const parsed = media ? parseDataUri(media.url) : null;
+    if (!parsed) throw new Error('The text-to-speech model returned no audio.');
 
-    const audioBuffer = Buffer.from(
-      media.url.substring(media.url.indexOf(',') + 1),
-      'base64'
-    );
-    
-    const wavBase64 = await toWav(audioBuffer);
-
-    return { audioDataUri: `data:audio/wav;base64,${wavBase64}` };
+    // Depending on the model, Gemini TTS returns either a WAV file or raw 16-bit PCM;
+    // normalize to WAV so browsers can play it.
+    const wav = toWavBytes(parsed.mimeType, parsed.params, Buffer.from(parsed.base64, 'base64'));
+    return { audioDataUri: `data:audio/wav;base64,${Buffer.from(wav).toString('base64')}` };
   }
 );
+
+export async function generateAudio(input: GenerateAudioInput): Promise<GenerateAudioOutput> {
+  return generateAudioFlow(input);
+}
