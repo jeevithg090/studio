@@ -1,23 +1,23 @@
 'use server';
 
 /**
- * @fileOverview A flow that edits note content using AI for rephrasing, translating, or grammar correction.
- *
- * - editNoteWithAI - A function that edits the content of a note using AI.
- * - EditNoteWithAIInput - The input type for the editNoteWithAI function.
- * - EditNoteWithAIOutput - The return type for the editNoteWithAI function.
+ * Edits note content with AI: rephrase, translate, or fix grammar.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
+import { MAX_NOTE_TEXT_CHARS } from '@/lib/limits';
 
-const EditNoteWithAIInputSchema = z.object({
-  content: z.string().describe('The content of the note to be edited.'),
-  action: z
-    .enum(['rephrase', 'translate', 'fix grammar'])
-    .describe('The action to perform on the note content.'),
-  language: z.string().optional().describe('The target language for translation.'),
-});
+const EditNoteWithAIInputSchema = z
+  .object({
+    content: z.string().trim().min(1).max(MAX_NOTE_TEXT_CHARS).describe('The content of the note to be edited.'),
+    action: z.enum(['rephrase', 'translate', 'fix grammar']).describe('The action to perform on the note content.'),
+    language: z.string().trim().min(1).max(50).optional().describe('The target language for translation.'),
+  })
+  .refine((input) => input.action !== 'translate' || input.language, {
+    message: 'A target language is required for translation.',
+    path: ['language'],
+  });
 export type EditNoteWithAIInput = z.infer<typeof EditNoteWithAIInputSchema>;
 
 const EditNoteWithAIOutputSchema = z.object({
@@ -25,25 +25,21 @@ const EditNoteWithAIOutputSchema = z.object({
 });
 export type EditNoteWithAIOutput = z.infer<typeof EditNoteWithAIOutputSchema>;
 
-export async function editNoteWithAI(input: EditNoteWithAIInput): Promise<EditNoteWithAIOutput> {
-  return editNoteWithAIFlow(input);
-}
-
 const prompt = ai.definePrompt({
   name: 'editNoteAIPrompt',
-  input: {schema: EditNoteWithAIInputSchema},
-  output: {schema: EditNoteWithAIOutputSchema},
+  input: { schema: EditNoteWithAIInputSchema },
+  output: { schema: EditNoteWithAIOutputSchema },
   prompt: `You are an AI assistant that helps users edit their notes.
+Perform the requested action on the note content and return only the full edited content.
+Preserve the original meaning, line breaks and list formatting.
 
-The user will provide you with the content of a note and an action to perform on it. You should perform the action and return the edited content.
-
-Here is the note content: {{{content}}}
-
-Here is the action: {{{action}}}
-
+Action: {{{action}}}
 {{#if language}}
-The target language is: {{{language}}}
+Target language: {{{language}}}
 {{/if}}
+
+Note content:
+{{{content}}}
 `,
 });
 
@@ -53,10 +49,13 @@ const editNoteWithAIFlow = ai.defineFlow(
     inputSchema: EditNoteWithAIInputSchema,
     outputSchema: EditNoteWithAIOutputSchema,
   },
-  async input => {
-    const {output} = await prompt(input);
-    return {
-      editedContent: output!.editedContent,
-    };
+  async (input) => {
+    const { output } = await prompt(input);
+    if (!output) throw new Error('The model returned no edited content.');
+    return output;
   }
 );
+
+export async function editNoteWithAI(input: EditNoteWithAIInput): Promise<EditNoteWithAIOutput> {
+  return editNoteWithAIFlow(input);
+}

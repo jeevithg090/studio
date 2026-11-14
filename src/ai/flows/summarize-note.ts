@@ -1,18 +1,15 @@
-// SummarizeNoteWithAIFlow implementation
 'use server';
+
 /**
- * @fileOverview A flow to summarize a note using AI.
- *
- * - summarizeNote - A function that handles the note summarization process.
- * - SummarizeNoteInput - The input type for the summarizeNote function.
- * - SummarizeNoteOutput - The return type for the summarizeNote function.
+ * Summarizes a note into a short paragraph.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
+import { MAX_NOTE_TEXT_CHARS } from '@/lib/limits';
 
 const SummarizeNoteInputSchema = z.object({
-  noteContent: z.string().describe('The content of the note to summarize.'),
+  noteContent: z.string().trim().min(1).max(MAX_NOTE_TEXT_CHARS).describe('The content of the note to summarize.'),
 });
 export type SummarizeNoteInput = z.infer<typeof SummarizeNoteInputSchema>;
 
@@ -21,15 +18,11 @@ const SummarizeNoteOutputSchema = z.object({
 });
 export type SummarizeNoteOutput = z.infer<typeof SummarizeNoteOutputSchema>;
 
-export async function summarizeNote(input: SummarizeNoteInput): Promise<SummarizeNoteOutput> {
-  return summarizeNoteFlow(input);
-}
-
 const summarizeNotePrompt = ai.definePrompt({
   name: 'summarizeNotePrompt',
-  input: {schema: SummarizeNoteInputSchema},
-  output: {schema: SummarizeNoteOutputSchema},
-  prompt: `Summarize the following note content:
+  input: { schema: SummarizeNoteInputSchema },
+  output: { schema: SummarizeNoteOutputSchema },
+  prompt: `Summarize the following note in a concise paragraph that captures its key points and any action items.
 
 {{{noteContent}}}`,
 });
@@ -40,8 +33,13 @@ const summarizeNoteFlow = ai.defineFlow(
     inputSchema: SummarizeNoteInputSchema,
     outputSchema: SummarizeNoteOutputSchema,
   },
-  async input => {
-    const {output} = await summarizeNotePrompt(input);
-    return output!;
+  async (input) => {
+    const { output } = await summarizeNotePrompt(input);
+    if (!output) throw new Error('The model returned no summary.');
+    return output;
   }
 );
+
+export async function summarizeNote(input: SummarizeNoteInput): Promise<SummarizeNoteOutput> {
+  return summarizeNoteFlow(input);
+}
