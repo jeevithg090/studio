@@ -1,26 +1,46 @@
-import type {Metadata} from 'next';
-import { Toaster } from "@/components/ui/toaster"
+import type { Metadata, Viewport } from 'next';
+import { Inter, Space_Grotesk } from 'next/font/google';
+import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
 
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
+const spaceGrotesk = Space_Grotesk({ subsets: ['latin'], variable: '--font-space-grotesk', display: 'swap' });
+
+const description =
+  'A voice-powered AI notebook: record and transcribe, import PowerPoint text, and summarize, edit, continue and listen to your notes.';
+
 export const metadata: Metadata = {
-  title: 'VocalNote',
-  description: 'A smart voice-powered AI notebook for writing, summarizing, and listening to your notes.',
+  metadataBase: process.env.NEXT_PUBLIC_SITE_URL ? new URL(process.env.NEXT_PUBLIC_SITE_URL) : undefined,
+  title: {
+    default: 'VocalNote – The AI-Powered Notebook',
+    template: '%s · VocalNote',
+  },
+  description,
+  applicationName: 'VocalNote',
+  openGraph: {
+    type: 'website',
+    siteName: 'VocalNote',
+    title: 'VocalNote – The AI-Powered Notebook',
+    description,
+  },
+  twitter: {
+    card: 'summary',
+    title: 'VocalNote – The AI-Powered Notebook',
+    description,
+  },
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export const viewport: Viewport = {
+  themeColor: '#7c3aed',
+  width: 'device-width',
+  initialScale: 1,
+};
+
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-      </head>
-      <body className="font-body antialiased" suppressHydrationWarning>
-        <div className="contents">{children}</div>
+    <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable}`}>
+      <body className="font-body antialiased">
+        {children}
         <Toaster />
       </body>
     </html>
