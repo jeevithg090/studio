@@ -1,81 +1,62 @@
 'use client';
 
-import { useTransition } from 'react';
-import { Sparkles, Languages, Pilcrow, PenLine, Loader2 } from 'lucide-react';
+import { Languages, Loader2, PenLine, Pilcrow, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuLabel, 
-  DropdownMenuSeparator, 
-  DropdownMenuSub, 
-  DropdownMenuSubContent, 
-  DropdownMenuSubTrigger, 
-  DropdownMenuTrigger 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { editNoteWithAI } from '@/ai/flows/edit-note-ai';
-import { useToast } from '@/hooks/use-toast';
+import { editNoteWithAI, type EditNoteWithAIInput } from '@/ai/flows/edit-note-ai';
 
 interface AIEditMenuProps {
   content: string;
-  onContentChange: (newContent: string) => void;
+  /** Runs the edit; the parent owns busy state, error handling and applying the result. */
+  onEdit: (task: () => Promise<string>) => void;
+  isPending: boolean;
   disabled?: boolean;
 }
 
-const languages = [
-  { code: 'Spanish', name: 'Spanish' },
-  { code: 'French', name: 'French' },
-  { code: 'German', name: 'German' },
-  { code: 'Japanese', name: 'Japanese' },
-  { code: 'Mandarin Chinese', name: 'Chinese' },
-];
+const LANGUAGES = ['Spanish', 'French', 'German', 'Hindi', 'Japanese', 'Mandarin Chinese'] as const;
 
-export function AIEditMenu({ content, onContentChange, disabled }: AIEditMenuProps) {
-  const [isEditing, startEditTransition] = useTransition();
-  const { toast } = useToast();
-
-  const handleEdit = async (action: 'rephrase' | 'translate' | 'fix grammar', language?: string) => {
-    startEditTransition(async () => {
-      try {
-        const result = await editNoteWithAI({ content, action, language });
-        onContentChange(result.editedContent);
-        toast({ title: 'AI Edit Successful', description: `Your note has been updated.` });
-      } catch (error) {
-        console.error('AI Edit failed:', error);
-        toast({ variant: 'destructive', title: 'AI Edit Failed', description: 'Could not edit the note. Please try again.' });
-      }
-    });
-  };
+export function AIEditMenu({ content, onEdit, isPending, disabled }: AIEditMenuProps) {
+  const edit = (action: EditNoteWithAIInput['action'], language?: string) =>
+    onEdit(async () => (await editNoteWithAI({ content, action, language })).editedContent);
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" disabled={disabled || isEditing}>
-          {isEditing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-          AI Edit
+        <Button variant="outline" size="sm" disabled={disabled}>
+          {isPending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Sparkles aria-hidden="true" />}
+          AI edit
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>AI Editing Tools</DropdownMenuLabel>
+      <DropdownMenuContent align="start" className="w-56">
+        <DropdownMenuLabel>AI editing tools</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => handleEdit('rephrase')}>
-          <PenLine className="mr-2 h-4 w-4" />
-          <span>Rephrase</span>
+        <DropdownMenuItem onSelect={() => edit('rephrase')}>
+          <PenLine className="mr-2 h-4 w-4" aria-hidden="true" />
+          Rephrase
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleEdit('fix grammar')}>
-          <Pilcrow className="mr-2 h-4 w-4" />
-          <span>Fix Grammar</span>
+        <DropdownMenuItem onSelect={() => edit('fix grammar')}>
+          <Pilcrow className="mr-2 h-4 w-4" aria-hidden="true" />
+          Fix grammar
         </DropdownMenuItem>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
-            <Languages className="mr-2 h-4 w-4" />
-            <span>Translate</span>
+            <Languages className="mr-2 h-4 w-4" aria-hidden="true" />
+            Translate
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
-            {languages.map((lang) => (
-              <DropdownMenuItem key={lang.code} onClick={() => handleEdit('translate', lang.code)}>
-                {lang.name}
+            {LANGUAGES.map((language) => (
+              <DropdownMenuItem key={language} onSelect={() => edit('translate', language)}>
+                {language}
               </DropdownMenuItem>
             ))}
           </DropdownMenuSubContent>

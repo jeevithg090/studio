@@ -1,310 +1,328 @@
 'use client';
 
-import { useEffect, useState, useTransition, useRef, useMemo } from 'react';
-import { Bot, Loader2, Mic, Music, Save, Trash2, Upload, Keyboard } from 'lucide-react';
-import type { Note } from '@/lib/types';
+import { useRef, useState } from 'react';
+import { Bot, FileUp, Keyboard, Loader2, Mic, Music, Square, Trash2 } from 'lucide-react';
+import type { Note, NoteUpdate } from '@/lib/types';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { useAudioRecorder, type RecorderError } from '@/hooks/use-audio-recorder';
 import { summarizeNote } from '@/ai/flows/summarize-note';
 import { generateAudio } from '@/ai/flows/generate-audio';
 import { transcribeAudio } from '@/ai/flows/transcribe-audio';
-import { extractPptText } from '@/ai/flows/extract-ppt-text';
 import { continueWriting } from '@/ai/flows/continue-writing';
+import { blobToDataUri, formatBytes } from '@/lib/files';
+import { MAX_AUDIO_BYTES, MAX_NOTE_TEXT_CHARS, MAX_PPTX_BYTES, MAX_TTS_TEXT_CHARS } from '@/lib/limits';
+import { appendContinuation, appendParagraph, countWords, titleFromFilename } from '@/lib/notes';
 import { AIEditMenu } from './ai-edit-menu';
-import { Separator } from './ui/separator';
+
+type PendingAction = 'transcribe' | 'import' | 'summarize' | 'continue' | 'audio' | 'edit';
 
 interface NoteEditorProps {
   note: Note;
-  onNoteUpdate: (updatedFields: Partial<Note> & { id: string }) => void;
-  onNoteSave: (updatedFields: Partial<Note> & { id: string }) => void;
+  onNoteUpdate: (update: NoteUpdate) => void;
   onNoteDelete: (id: string) => void;
 }
 
-export function NoteEditor({ note, onNoteUpdate, onNoteSave, onNoteDelete }: NoteEditorProps) {
-  const [title, setTitle] = useState(note.title);
-  const [content, setContent] = useState(note.content);
-  
-  const [isSummarizing, startSummarizeTransition] = useTransition();
-  const [isContinuing, startContinueTransition] = useTransition();
-  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, startTranscribeTransition] = useTransition();
-  const [isUploading, startUploadTransition] = useTransition();
-  
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+const RECORDER_ERRORS: Record<RecorderError, string> = {
+  unsupported: 'Audio recording is not supported in this browser.',
+  'permission-denied': 'Microphone access was denied. Allow it in your browser settings to record.',
+  failed: 'Could not access the microphone.',
+};
+
+/**
+ * Errors thrown by server actions carry a `digest` and, in production, a
+ * redacted message, so only client-side error messages are shown verbatim.
+ */
+function describeError(error: unknown): string {
+  if (error instanceof Error && error.message && !('digest' in error)) return error.message;
+  return 'Something went wrong. Please try again.';
+}
+
+export function NoteEditor({ note, onNoteUpdate, onNoteDelete }: NoteEditorProps) {
+  const [pending, setPending] = useState<PendingAction | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Async work reads the latest note through this ref instead of a stale closure.
+  const noteRef = useRef(note);
+  noteRef.current = note;
   const { toast } = useToast();
 
-  useEffect(() => {
-    setTitle(note.title);
-    setContent(note.content);
-  }, [note]);
-
-  const wordCount = useMemo(() => {
-    if (!content) return 0;
-    return content.trim().split(/\s+/).filter(Boolean).length;
-  }, [content]);
-
-  const charCount = useMemo(() => {
-    return content.length;
-  }, [content]);
-
-
-  const handleSave = () => {
-    onNoteSave({ id: note.id, title, content, updatedAt: new Date() });
+  /** Runs an AI action with a shared busy state and consistent error toasts. */
+  const runAction = async (action: PendingAction, failureTitle: string, task: () => Promise<void>) => {
+    setPending(action);
+    try {
+      await task();
+    } catch (error) {
+      console.error(`${action} failed:`, error);
+      toast({ variant: 'destructive', title: failureTitle, description: describeError(error) });
+    } finally {
+      setPending(null);
+    }
   };
 
-  const handleContentChange = (newContent: string) => {
-    setContent(newContent);
-    onNoteUpdate({ id: note.id, content: newContent, updatedAt: new Date() });
+  const recorder = useAudioRecorder({
+    onRecordingComplete: (recording) => {
+      if (recording.size > MAX_AUDIO_BYTES) {
+        toast({
+          variant: 'destructive',
+          title: 'Recording too long',
+          description: `Recordings must be under ${formatBytes(MAX_AUDIO_BYTES)}. Try a shorter clip.`,
+        });
+        return;
+      }
+      void runAction('transcribe', 'Transcription failed', async () => {
+        const audioDataUri = await blobToDataUri(recording);
+        const { transcribedText } = await transcribeAudio({ audioDataUri });
+        if (!transcribedText.trim()) {
+          toast({ title: 'No speech detected', description: 'Nothing was added to your note.' });
+          return;
+        }
+        onNoteUpdate({ id: note.id, content: appendParagraph(noteRef.current.content, transcribedText) });
+        toast({ title: 'Transcription complete', description: 'Your recording has been added to the note.' });
+      });
+    },
+    onError: (error) =>
+      toast({ variant: 'destructive', title: 'Recording error', description: RECORDER_ERRORS[error] }),
+  });
+
+  const content = note.content;
+  const hasContent = content.trim().length > 0;
+  const isBusy = pending !== null || recorder.isRecording;
+
+  const requireContent = (limit: number, what: string): boolean => {
+    if (!hasContent) {
+      toast({ variant: 'destructive', title: 'Note is empty', description: `Add some text before you ${what}.` });
+      return false;
+    }
+    if (content.length > limit) {
+      toast({
+        variant: 'destructive',
+        title: 'Note is too long',
+        description: `This action supports up to ${limit.toLocaleString()} characters.`,
+      });
+      return false;
+    }
+    return true;
   };
 
-  const blobToBase64 = (blob: Blob): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
+  const handlePptxImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pptx')) {
+      toast({ variant: 'destructive', title: 'Unsupported file', description: 'Please choose a .pptx presentation.' });
+      return;
+    }
+    if (file.size > MAX_PPTX_BYTES) {
+      toast({
+        variant: 'destructive',
+        title: 'File too large',
+        description: `Presentations must be under ${formatBytes(MAX_PPTX_BYTES)}.`,
+      });
+      return;
+    }
+    await runAction('import', 'Import failed', async () => {
+      // Parsed entirely in the browser; the file is never uploaded. Loaded lazily to keep the editor bundle small.
+      const { extractTextFromPptx } = await import('@/lib/pptx');
+      const extractedText = await extractTextFromPptx(await file.arrayBuffer());
+      if (!extractedText) {
+        toast({ title: 'No text found', description: 'The presentation does not contain any slide text.' });
+        return;
+      }
+      const current = noteRef.current;
+      onNoteUpdate({
+        id: note.id,
+        title: current.content.trim() ? current.title : titleFromFilename(file.name),
+        content: appendParagraph(current.content, extractedText),
+        source: { type: 'pptx', filename: file.name },
+      });
+      toast({ title: 'Presentation imported', description: `Text from ${file.name} was added to the note.` });
     });
   };
 
-  const toggleRecording = async () => {
-    if (isRecording) {
-      mediaRecorderRef.current?.stop();
-      setIsRecording(false);
-    } else {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          mediaRecorderRef.current = new MediaRecorder(stream);
-          audioChunksRef.current = [];
-
-          mediaRecorderRef.current.ondataavailable = (event) => {
-            audioChunksRef.current.push(event.data);
-          };
-
-          mediaRecorderRef.current.onstop = async () => {
-            const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-            const audioDataUri = await blobToBase64(audioBlob);
-            
-            startTranscribeTransition(async () => {
-              try {
-                toast({ title: 'Transcribing audio...' });
-                const result = await transcribeAudio({ audioDataUri });
-                const newContent = content ? `${content}\n\n${result.transcribedText}` : result.transcribedText;
-                handleContentChange(newContent);
-                toast({ title: 'Transcription Complete', description: 'Your voice has been added to the note.' });
-              } catch (error) {
-                console.error('Transcription failed:', error);
-                toast({ variant: 'destructive', title: 'Transcription Failed' });
-              }
-            });
-            stream.getTracks().forEach(track => track.stop());
-          };
-
-          mediaRecorderRef.current.start();
-          setIsRecording(true);
-          toast({ title: 'Recording started...' });
-        } catch (err) {
-          console.error('Error starting recording:', err);
-          toast({ variant: 'destructive', title: 'Recording Error', description: 'Could not access microphone.' });
-        }
-      }
-    }
-  };
-
-  const handlePptUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-        const pptDataUri = reader.result as string;
-        startUploadTransition(async () => {
-            try {
-                const result = await extractPptText({ pptDataUri });
-                onNoteUpdate({ 
-                  id: note.id, 
-                  title: file.name.replace(/\.[^/.]+$/, ""),
-                  content: result.extractedText, 
-                  source: { type: 'ppt', filename: file.name },
-                  updatedAt: new Date()
-                });
-                toast({ title: 'PPT Processed', description: 'Text has been extracted from the presentation.' });
-            } catch (error) {
-                console.error('PPT extraction failed:', error);
-                toast({ variant: 'destructive', title: 'Extraction Failed', description: 'Could not extract text from the PPT.' });
-            }
-        });
-    };
-    reader.readAsDataURL(file);
-    toast({ title: 'Uploading PPT...', description: 'Please wait while we process your file.' });
-    if (event.target) {
-        event.target.value = '';
-    }
-  };
-
-  const handleSummarize = async () => {
-    if (!content) {
-      toast({ variant: 'destructive', title: 'Content is empty', description: 'Cannot summarize an empty note.' });
-      return;
-    }
-    startSummarizeTransition(async () => {
-      try {
-        const result = await summarizeNote({ noteContent: content });
-        onNoteUpdate({ id: note.id, summary: result.summary, updatedAt: new Date() });
-        toast({ title: 'Summary Generated', description: 'The AI-powered summary for your note is ready.' });
-      } catch (error) {
-        console.error('Summarization failed:', error);
-        toast({ variant: 'destructive', title: 'Summarization Failed', description: 'Could not generate summary. Please try again.' });
-      }
+  const handleSummarize = () => {
+    if (!requireContent(MAX_NOTE_TEXT_CHARS, 'summarize')) return;
+    void runAction('summarize', 'Summarization failed', async () => {
+      const { summary } = await summarizeNote({ noteContent: content });
+      onNoteUpdate({ id: note.id, summary });
+      toast({ title: 'Summary generated' });
     });
   };
 
   const handleContinueWriting = () => {
-    if (!content) {
-      toast({ variant: 'destructive', title: 'Content is empty', description: 'Cannot continue writing an empty note.' });
-      return;
-    }
-    startContinueTransition(async () => {
-      try {
-        toast({ title: 'AI is thinking...' });
-        const result = await continueWriting({ content });
-        const newContent = content.trim() + ' ' + result.continuedText;
-        handleContentChange(newContent);
-        toast({ title: 'Text Generated', description: 'AI has continued writing for you.' });
-      } catch (error) {
-        console.error('Continue writing failed:', error);
-        toast({ variant: 'destructive', title: 'AI Failed', description: 'Could not generate text. Please try again.' });
-      }
+    if (!requireContent(MAX_NOTE_TEXT_CHARS, 'continue writing')) return;
+    void runAction('continue', 'Could not continue writing', async () => {
+      const { continuedText } = await continueWriting({ content });
+      onNoteUpdate({ id: note.id, content: appendContinuation(noteRef.current.content, continuedText) });
+      toast({ title: 'Text generated', description: 'The AI continued your note.' });
     });
   };
 
-
-  const handleGenerateAudio = async () => {
-    if (!content) {
-      toast({ variant: 'destructive', title: 'Content is empty', description: 'Cannot generate audio for an empty note.' });
-      return;
-    }
-    setIsGeneratingAudio(true);
-    toast({ title: 'Generating Audio...', description: 'Please wait while we process your note. This may take a moment.' });
-    try {
-      const result = await generateAudio({ text: content });
-      onNoteUpdate({ id: note.id, audioUrl: result.audioDataUri, updatedAt: new Date() });
-      toast({ title: 'Audio Generated', description: 'Your note is now available as audio.' });
-    } catch (error) {
-      console.error('Audio generation failed:', error);
-      toast({ variant: 'destructive', title: 'Audio Generation Failed', description: 'Could not generate audio. Please try again.' });
-    } finally {
-      setIsGeneratingAudio(false);
-    }
+  const handleGenerateAudio = () => {
+    if (!requireContent(MAX_TTS_TEXT_CHARS, 'generate audio')) return;
+    void runAction('audio', 'Audio generation failed', async () => {
+      const { audioDataUri } = await generateAudio({ text: content });
+      onNoteUpdate({ id: note.id, audioUrl: audioDataUri });
+      toast({ title: 'Audio generated', description: 'Your note is ready to play.' });
+    });
   };
 
-  const isBusy = isRecording || isTranscribing || isUploading || isSummarizing || isGeneratingAudio || isContinuing;
+  const handleAiEdit = (task: () => Promise<string>) =>
+    runAction('edit', 'AI edit failed', async () => {
+      const editedContent = await task();
+      onNoteUpdate({ id: note.id, content: editedContent });
+      toast({ title: 'Note updated by AI' });
+    });
+
+  const spinner = <Loader2 className="animate-spin" aria-hidden="true" />;
 
   return (
-    <div className="flex flex-col h-full rounded-lg border bg-background shadow-sm">
-      <div className="flex-shrink-0 flex flex-wrap items-center justify-between gap-y-2 gap-x-4 p-3 border-b">
-        <div className="flex items-center gap-2 flex-wrap">
-            <Button onClick={toggleRecording} variant="outline" size="sm" disabled={isTranscribing || isUploading}>
-                {isRecording ? <Loader2 className="animate-spin" /> : <Mic />}
-                {isRecording ? 'Stop' : isTranscribing ? 'Transcribing...' : 'Record'}
-            </Button>
-            <Button onClick={() => fileInputRef.current?.click()} variant="outline" size="sm" disabled={isUploading || isRecording}>
-                {isUploading ? <Loader2 className="animate-spin" /> : <Upload />}
-                {isUploading ? 'Importing...' : 'Import PPT'}
-            </Button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handlePptUpload}
-              className="hidden"
-              accept=".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-            />
-            <Separator orientation="vertical" className="h-8 mx-1 hidden sm:block" />
-            <AIEditMenu content={content} onContentChange={handleContentChange} disabled={!content || isBusy}/>
-            <Button onClick={handleContinueWriting} disabled={isContinuing || !content || isBusy} variant="outline" size="sm">
-              {isContinuing ? <Loader2 className="animate-spin" /> : <Keyboard />}
-              Continue Writing
-            </Button>
-            <Button onClick={handleSummarize} disabled={isSummarizing || !content || isBusy} variant="outline" size="sm">
-              {isSummarizing ? <Loader2 className="animate-spin" /> : <Bot />}
-              Summarize
-            </Button>
-            <Button onClick={handleGenerateAudio} disabled={isGeneratingAudio || !content || isBusy} variant="outline" size="sm">
-              {isGeneratingAudio ? <Loader2 className="animate-spin" /> : <Music />}
-              Generate Audio
-            </Button>
-        </div>
-        <div className="flex items-center gap-2">
-            <Button onClick={handleSave} disabled={isBusy} size="sm">
-              <Save /> Save
-            </Button>
-            <Button onClick={() => onNoteDelete(note.id)} variant="destructive" size="icon" disabled={isBusy}>
-              <Trash2 />
-            </Button>
-        </div>
-      </div>
-      
-      <div className="flex-grow overflow-y-auto flex flex-col">
-        <div className="p-6 md:p-8 flex flex-col gap-6 flex-grow">
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Note Title"
-              className="text-3xl lg:text-4xl font-headline font-bold h-auto p-0 border-none focus-visible:ring-0 shadow-none bg-transparent"
-              disabled={isBusy}
-            />
-            <Textarea
-              value={content}
-              onChange={(e) => handleContentChange(e.target.value)}
-              placeholder="Start writing your note here, record your voice, or import a PPT..."
-              className="flex-grow text-base resize-none border-none focus-visible:ring-0 shadow-none p-0 bg-transparent min-h-[30vh]"
-              disabled={isBusy}
-            />
-        </div>
-          
-        <div className="flex-shrink-0 mt-auto">
-            {note.summary && (
-              <div className="p-6 md:p-8 pt-0">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="font-headline flex items-center gap-2 text-lg">
-                      <Bot /> AI Summary
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <CardDescription>{note.summary}</CardDescription>
-                  </CardContent>
-                </Card>
-              </div>
+    <div className="flex h-full flex-col rounded-lg border bg-background shadow-sm" aria-busy={pending !== null}>
+      <div
+        role="toolbar"
+        aria-label="Note actions"
+        className="flex flex-shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b p-3"
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            onClick={recorder.isRecording ? recorder.stop : recorder.start}
+            variant={recorder.isRecording ? 'destructive' : 'outline'}
+            size="sm"
+            disabled={pending !== null}
+            aria-pressed={recorder.isRecording}
+          >
+            {pending === 'transcribe' ? (
+              spinner
+            ) : recorder.isRecording ? (
+              <Square aria-hidden="true" />
+            ) : (
+              <Mic aria-hidden="true" />
             )}
+            {recorder.isRecording ? 'Stop recording' : pending === 'transcribe' ? 'Transcribing…' : 'Record'}
+          </Button>
+          <Button onClick={() => fileInputRef.current?.click()} variant="outline" size="sm" disabled={isBusy}>
+            {pending === 'import' ? spinner : <FileUp aria-hidden="true" />}
+            {pending === 'import' ? 'Importing…' : 'Import PPTX'}
+          </Button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handlePptxImport}
+            className="hidden"
+            tabIndex={-1}
+            aria-hidden="true"
+            accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+          />
+          <Separator orientation="vertical" className="mx-1 hidden h-8 sm:block" />
+          <AIEditMenu
+            content={content}
+            onEdit={handleAiEdit}
+            isPending={pending === 'edit'}
+            disabled={!hasContent || isBusy}
+          />
+          <Button onClick={handleContinueWriting} disabled={!hasContent || isBusy} variant="outline" size="sm">
+            {pending === 'continue' ? spinner : <Keyboard aria-hidden="true" />}
+            Continue writing
+          </Button>
+          <Button onClick={handleSummarize} disabled={!hasContent || isBusy} variant="outline" size="sm">
+            {pending === 'summarize' ? spinner : <Bot aria-hidden="true" />}
+            Summarize
+          </Button>
+          <Button onClick={handleGenerateAudio} disabled={!hasContent || isBusy} variant="outline" size="sm">
+            {pending === 'audio' ? spinner : <Music aria-hidden="true" />}
+            Generate audio
+          </Button>
+        </div>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="destructive" size="icon" disabled={isBusy} aria-label="Delete note" title="Delete note">
+              <Trash2 aria-hidden="true" />
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this note?</AlertDialogTitle>
+              <AlertDialogDescription>
+                &ldquo;{note.title || 'Untitled Note'}&rdquo; will be permanently removed from this browser.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => onNoteDelete(note.id)}>Delete</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
 
-            {note.audioUrl && (
-              <div className="p-6 md:px-8 pt-0">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="font-headline flex items-center gap-2 text-lg">
-                      <Music /> Note Playback
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <audio controls className="w-full" src={note.audioUrl}>
-                      Your browser does not support the audio element.
-                    </audio>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
+      <div className="flex flex-grow flex-col overflow-y-auto">
+        <div className="flex flex-grow flex-col gap-6 p-6 md:p-8">
+          <Input
+            value={note.title}
+            onChange={(e) => onNoteUpdate({ id: note.id, title: e.target.value })}
+            placeholder="Note title"
+            aria-label="Note title"
+            className="h-auto border-none bg-transparent p-0 font-headline text-3xl font-bold shadow-none focus-visible:ring-0 lg:text-4xl"
+            disabled={isBusy}
+          />
+          <Textarea
+            value={content}
+            onChange={(e) => onNoteUpdate({ id: note.id, content: e.target.value })}
+            placeholder="Start writing your note here, record your voice, or import a presentation…"
+            aria-label="Note content"
+            className="min-h-[30vh] flex-grow resize-none border-none bg-transparent p-0 text-base shadow-none focus-visible:ring-0"
+            disabled={isBusy}
+          />
+        </div>
+
+        <div className="mt-auto flex flex-shrink-0 flex-col gap-6 px-6 pb-6 md:px-8">
+          {note.summary && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 font-headline text-lg">
+                  <Bot aria-hidden="true" /> AI Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="whitespace-pre-wrap text-sm text-muted-foreground">{note.summary}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {note.audioUrl && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 font-headline text-lg">
+                  <Music aria-hidden="true" /> Note playback
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <audio controls className="w-full" src={note.audioUrl} aria-label={`Audio for ${note.title}`}>
+                  Your browser does not support the audio element.
+                </audio>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
-      <div className="flex-shrink-0 flex items-center justify-end gap-4 text-xs text-muted-foreground p-3 border-t">
-          <span>Words: {wordCount}</span>
-          <span>Characters: {charCount}</span>
+      <div className="flex flex-shrink-0 flex-wrap items-center justify-between gap-2 border-t p-3 text-xs text-muted-foreground">
+        <span>{note.source ? `Imported from ${note.source.filename}` : ''}</span>
+        <span aria-live="polite">
+          {countWords(content).toLocaleString()} words · {content.length.toLocaleString()} characters
+        </span>
       </div>
     </div>
   );

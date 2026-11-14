@@ -1,117 +1,112 @@
 'use client';
 
-import { useState } from 'react';
-import { SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
-import { NoteList } from './note-list';
-import { NoteEditor } from './note-editor';
-import { mockNotes } from '@/lib/data';
-import type { Note } from '@/lib/types';
-import { PenSquareIcon } from 'lucide-react';
+import Link from 'next/link';
+import { PenSquare, PlusCircle } from 'lucide-react';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from '@/components/ui/sidebar';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useNotes } from '@/hooks/use-notes';
 import { useToast } from '@/hooks/use-toast';
+import { Logo } from './logo';
+import { NoteEditor } from './note-editor';
+import { NoteList } from './note-list';
 
-const Logo = () => (
-  <svg
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className="h-8 w-8 text-primary"
-    aria-hidden="true"
-  >
-    <path d="M14 3V7C14 7.26522 14.1054 7.51957 14.2929 7.70711C14.4804 7.89464 14.7348 8 15 8H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M17 21H7C6.46957 21 5.96086 20.7893 5.58579 20.4142C5.21071 20.0391 5 19.5304 5 19V5C5 4.46957 5.21071 3.96086 5.58579 3.58579C5.96086 3.21071 6.46957 3 7 3H14L19 8V19C19 19.5304 18.7893 20.0391 18.4142 20.4142C18.0391 20.7893 17.5304 21 17 21Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M9 17V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M12 17V14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M15 17V16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
+const SAVE_STATUS_LABEL = {
+  saved: 'Saved in this browser',
+  'saved-without-audio': 'Saved (audio too large to keep)',
+  failed: 'Not saved: browser storage is full',
+  unavailable: 'Browser storage unavailable: changes will not persist',
+} as const;
 
+function EditorSkeleton() {
+  return (
+    <div className="flex h-full flex-col gap-6 rounded-lg border bg-background p-8" aria-label="Loading notes">
+      <Skeleton className="h-9 w-2/3" />
+      <Skeleton className="h-4 w-full" />
+      <Skeleton className="h-4 w-11/12" />
+      <Skeleton className="h-4 w-4/5" />
+    </div>
+  );
+}
 
 export function VocalNoteApp() {
-  const [notes, setNotes] = useState<Note[]>(mockNotes);
-  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(notes[0]?.id || null);
+  const { notes, selectedNote, selectedNoteId, selectNote, addNote, updateNote, deleteNote, isLoaded, saveStatus } =
+    useNotes();
   const { toast } = useToast();
 
-  const selectedNote = notes.find(note => note.id === selectedNoteId);
-
-  const handleSelectNote = (id: string) => setSelectedNoteId(id);
-
   const handleNewNote = () => {
-    const newNote: Note = {
-      id: crypto.randomUUID(),
-      title: 'Untitled Note',
-      content: '',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    setNotes(prevNotes => [newNote, ...prevNotes]);
-    setSelectedNoteId(newNote.id);
-    toast({ title: "New note created" });
-  };
-
-  const handleUpdateNote = (updatedFields: Partial<Note> & { id: string }) => {
-    setNotes(notes.map(n => n.id === updatedFields.id ? { ...n, ...updatedFields } : n));
-  };
-  
-  const handleSaveNote = (updatedFields: Partial<Note> & { id: string }) => {
-    handleUpdateNote(updatedFields);
-    toast({ title: "Note saved successfully" });
+    addNote();
+    toast({ title: 'New note created' });
   };
 
   const handleDeleteNote = (id: string) => {
-    const noteIndex = notes.findIndex(n => n.id === id);
-    const newNotes = notes.filter(n => n.id !== id);
-    setNotes(newNotes);
-
-    if (selectedNoteId === id) {
-      if (newNotes.length > 0) {
-        const newIndex = Math.max(0, noteIndex - 1);
-        setSelectedNoteId(newNotes[newIndex].id);
-      } else {
-        setSelectedNoteId(null);
-      }
-    }
-    toast({ title: "Note deleted" });
+    deleteNote(id);
+    toast({ title: 'Note deleted' });
   };
 
   return (
     <SidebarProvider>
-      <Sidebar collapsible="icon">
+      <Sidebar collapsible="offcanvas">
         <SidebarHeader>
-          <div className="flex items-center gap-2 p-2">
+          <Link
+            href="/"
+            className="flex items-center gap-2 rounded-md p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          >
             <Logo />
-            <div className="flex flex-col">
-              <h1 className="font-headline text-xl font-bold text-foreground">VocalNote</h1>
-              <p className="text-xs text-muted-foreground">Your AI Notebook</p>
-            </div>
-          </div>
+            <span className="flex flex-col">
+              <span className="font-headline text-xl font-bold">VocalNote</span>
+              <span className="text-xs text-sidebar-foreground/70">Your AI notebook</span>
+            </span>
+          </Link>
         </SidebarHeader>
         <SidebarContent>
           <NoteList
             notes={notes}
             selectedNoteId={selectedNoteId}
-            onSelectNote={handleSelectNote}
+            onSelectNote={selectNote}
             onNewNote={handleNewNote}
+            isLoaded={isLoaded}
           />
         </SidebarContent>
       </Sidebar>
-      <SidebarInset>
-        <div className="p-4 h-full bg-muted/20">
-          {selectedNote ? (
+      <SidebarInset className="h-svh min-h-0">
+        <header className="flex h-12 flex-shrink-0 items-center gap-2 border-b px-3">
+          <SidebarTrigger aria-label="Toggle note list" />
+          <h1 className="truncate font-headline text-sm font-semibold">{selectedNote?.title || 'VocalNote'}</h1>
+          {isLoaded && (
+            <span className="ml-auto hidden text-xs text-muted-foreground sm:inline" role="status" aria-live="polite">
+              {SAVE_STATUS_LABEL[saveStatus]}
+            </span>
+          )}
+        </header>
+        <div className="min-h-0 flex-1 bg-muted/20 p-2 sm:p-4">
+          {!isLoaded ? (
+            <EditorSkeleton />
+          ) : selectedNote ? (
             <NoteEditor
               key={selectedNote.id}
               note={selectedNote}
-              onNoteUpdate={handleUpdateNote}
-              onNoteSave={handleSaveNote}
+              onNoteUpdate={updateNote}
               onNoteDelete={handleDeleteNote}
             />
           ) : (
-            <div className="flex h-full items-center justify-center rounded-lg border-2 border-dashed bg-card">
+            <div className="flex h-full items-center justify-center rounded-lg border-2 border-dashed bg-card p-6">
               <div className="text-center">
-                <PenSquareIcon className="mx-auto h-12 w-12 text-muted-foreground" />
-                <h2 className="mt-4 text-2xl font-headline font-semibold text-foreground">No Note Selected</h2>
-                <p className="mt-2 text-sm text-muted-foreground">Select a note from the list or create a new one to get started.</p>
+                <PenSquare className="mx-auto h-12 w-12 text-muted-foreground" aria-hidden="true" />
+                <h2 className="mt-4 font-headline text-2xl font-semibold">No note selected</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Select a note from the list or create a new one to get started.
+                </p>
+                <Button onClick={handleNewNote} className="mt-6">
+                  <PlusCircle aria-hidden="true" /> New note
+                </Button>
               </div>
             </div>
           )}
